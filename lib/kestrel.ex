@@ -252,7 +252,7 @@ defmodule Kestrel do
 
     config = mod.config()
 
-    uri = Path.join(config[:url], url)
+    uri = Path.join(config[:url] || "", url)
     |> mod.process_request_url()
     |> URI.parse()
 
