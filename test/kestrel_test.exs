@@ -43,6 +43,20 @@ defmodule KestrelTest do
     assert req.method == "GET"
   end
 
+  test "build/1 accepts a URI struct for url" do
+    req =
+      RuntimeUrlClient.build(
+        url: URI.parse("http://example.com:8080/api"),
+        path: "/v1/users"
+      )
+
+    assert req.scheme == :http
+    assert req.host == "example.com"
+    assert req.port == 8080
+    assert req.path == "/api/v1/users"
+    assert req.method == "GET"
+  end
+
   test "build/1 encodes map body as JSON and adds content-type header" do
     req = Client.build(body: %{foo: "bar"})
 

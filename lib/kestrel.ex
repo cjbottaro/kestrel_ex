@@ -140,7 +140,10 @@ defmodule Kestrel do
         headers = get_config(config, req, :headers, [])
 
         url = if path do
-          uri = URI.parse(url)
+          uri = case url do
+            %URI{} = uri -> uri
+            uri when is_binary(uri) -> URI.parse(url)
+          end
           %URI{uri | path: Path.join(uri.path || "/", path)}
         else
           url
