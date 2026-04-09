@@ -7,6 +7,7 @@ defmodule Kestrel do
   - `config/0`: returns module config after `init/1`
   - `build/1`: builds a `%Finch.Request{}`
   - `request/2`: executes a request (from a `%Finch.Request{}` or keyword opts)
+  - `request!/2`: executes a request and raises on error
   - `stream/4`: streams a request (from a `%Finch.Request{}` or keyword opts)
 
   Request options are read from module config first, then per-request opts:
@@ -100,6 +101,19 @@ defmodule Kestrel do
   `opts` is passed through to `Finch.request/3`.
   """
   @callback request(req :: Finch.Request.t() | Keyword.t(), opts :: Finch.request_opts()) ::
+              {:ok, Finch.Response.t()} | {:error, Exception.t()}
+
+  @doc """
+  Executes a request and returns a `Finch.Response`.
+
+  Accepts either:
+
+  - a `%Finch.Request{}`
+  - keyword request options (forwarded through `build/1` first)
+
+  `opts` is passed through to `Finch.request!/3`.
+  """
+  @callback request!(req :: Finch.Request.t() | Keyword.t(), opts :: Finch.request_opts()) ::
               Finch.Response.t()
 
   @doc """
@@ -115,7 +129,7 @@ defmodule Kestrel do
               acc :: term(),
               fun :: (term(), term() -> term()),
               opts :: Finch.request_opts()
-            ) :: term()
+            ) :: {:ok, term()} | {:error, Exception.t()}
 
   @doc false
   @callback init(config :: Keyword.t()) :: Keyword.t()
@@ -162,6 +176,7 @@ defmodule Kestrel do
       end
 
       def request(req, opts \\ [])
+      def request!(req, opts \\ [])
 
       def request(%Finch.Request{} = req, opts) do
         case Finch.request(req, config()[:finch], opts) do
@@ -173,18 +188,29 @@ defmodule Kestrel do
               end)
 
             if json? do
-              %Finch.Response{resp | body: Jason.decode!(resp.body)}
+              {:ok, %Finch.Response{resp | body: Jason.decode!(resp.body)}}
             else
-              resp
+              {:ok, resp}
             end
 
           {:error, error} ->
-            raise error
+            {:error, error}
         end
       end
 
       def request(req, opts) when is_list(req) do
         build(req) |> request(opts)
+      end
+
+      def request!(%Finch.Request{} = req, opts) do
+        case request(req, opts) do
+          {:ok, resp} -> resp
+          {:error, error} -> raise error
+        end
+      end
+
+      def request!(req, opts) when is_list(req) do
+        build(req) |> request!(opts)
       end
 
       def stream(req, acc, fun, opts \\ [])

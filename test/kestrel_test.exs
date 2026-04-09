@@ -73,7 +73,7 @@ defmodule KestrelTest do
 
   test "request/2 accepts keyword opts and decodes JSON responses" do
     with_http_server(json_response(~s({"ok":true})), fn port ->
-      resp = RuntimeUrlClient.request(url: "http://127.0.0.1:#{port}/json")
+      assert {:ok, resp} = RuntimeUrlClient.request(url: "http://127.0.0.1:#{port}/json")
 
       assert resp.status == 200
       assert resp.body == %{"ok" => true}
@@ -83,11 +83,28 @@ defmodule KestrelTest do
   test "request/2 accepts Finch.Request and preserves non-json body" do
     with_http_server(text_response("plain text"), fn port ->
       req = RuntimeUrlClient.build(url: "http://127.0.0.1:#{port}/text")
-      resp = RuntimeUrlClient.request(req)
+      assert {:ok, resp} = RuntimeUrlClient.request(req)
 
       assert resp.status == 200
       assert resp.body == "plain text"
     end)
+  end
+
+  test "request!/2 returns the response body on success" do
+    with_http_server(json_response(~s({"ok":true})), fn port ->
+      resp = RuntimeUrlClient.request!(url: "http://127.0.0.1:#{port}/json")
+
+      assert resp.status == 200
+      assert resp.body == %{"ok" => true}
+    end)
+  end
+
+  test "request!/2 raises on error" do
+    port = unused_port()
+
+    assert_raise Mint.TransportError, fn ->
+      RuntimeUrlClient.request!(url: "http://127.0.0.1:#{port}/boom", receive_timeout: 50)
+    end
   end
 
   test "stream/4 accepts keyword opts" do
@@ -100,6 +117,17 @@ defmodule KestrelTest do
 
       assert result == {:ok, "stream-body"}
     end)
+  end
+
+  test "stream/4 returns Finch-style error tuples" do
+    port = unused_port()
+
+    assert {:error, %Mint.TransportError{}} =
+             RuntimeUrlClient.stream(
+               [url: "http://127.0.0.1:#{port}/boom", receive_timeout: 50],
+               "",
+               fn _, acc -> acc end
+             )
   end
 
   defp json_response(body) do
@@ -144,5 +172,14 @@ defmodule KestrelTest do
       if Process.alive?(server), do: Process.exit(server, :normal)
       if Port.info(listener), do: :gen_tcp.close(listener)
     end
+  end
+
+  defp unused_port do
+    {:ok, listener} =
+      :gen_tcp.listen(0, [:binary, packet: :raw, active: false, reuseaddr: true])
+
+    {:ok, {_addr, port}} = :inet.sockname(listener)
+    :ok = :gen_tcp.close(listener)
+    port
   end
 end
